@@ -1,8 +1,9 @@
+" markdown.vim - Preview markdown with GitHub styling
 " Language: Markdown
-" Maintainer: Swaroop C H <swaroop@swaroopch.com>
-" URL: https://github.com/swaroopch/vim-markdown-preview
-" License: WTFPL
-" Dependencies: http://fletcherpenney.net/multimarkdown/
+" Maintainer: Lonnon Foster <lonnon@lonnon.com>
+" URL: https://github.com/lonnon/vim-markdown-preview
+" License: MIT
+" Dependencies: python, mistune, pygments
 
 if exists("b:loaded_markdown_preview")
   finish
@@ -12,36 +13,76 @@ let b:loaded_markdown_preview = 1
 
 function! s:ShowMarkdownPreview(line1, line2)
   let text = getline(a:line1, a:line2)
-  let ofilename = "markdown-preview.md"
-  let nfilename = "markdown-preview.html"
+  let os = s:GetOS()
+  let tmp_dir = s:GetTempDir(os)
+
+  let md_file = tmp_dir . "markdown-preview.md"
+  let html_file = tmp_dir . "markdown-preview.html"
+
+  call writefile(text, md_file)
+  call s:ConvertMarkdown(md_file, html_file, os)
+  call s:DisplayHTML(html_file, os)
+endfunction
+
+function! s:GetOS()
+  if g:uname != ''
+    let uname = g:uname
+  else
+    let uname = system("uname -a")
+  endif
+
   if has('mac') || has('macunix')
-    call writefile(text, "/tmp/" . ofilename)
-    call system("multimarkdown /tmp/" . ofilename . " > /tmp/" . nfilename)
-    call system("open /tmp/" . nfilename)
-  elseif match(g:uname, 'Microsoft') > -1
+    let s:tmp_dir = '/tmp/'
+    return 'mac'
+  elseif match(uname, 'Microsoft') > -1
     " Windows WSL
-    let s:appdata = system("wslpath '" . $APPDATA . "'")[:-2]
-    let s:vimtmp = s:appdata . "/vim/tmp/"
-    if isdirectory(s:vimtmp) == 'FALSE'
-      call system("mkdir -p " . s:vimtmp)
-    endif
-    call writefile(text, s:vimtmp . ofilename)
-    call system('multimarkdown "' . s:vimtmp . ofilename . '" -o "' . s:vimtmp . nfilename . '"')
-    let s:winpath = system("wslpath -w " . s:vimtmp . nfilename)
-    let s:escpath = substitute(s:winpath, '\', '\\\\', 'g')
-    exec "!cmd.exe /c start" s:escpath
+    return 'wsl'
   elseif has('unix')
-    call writefile(text, "/tmp/" . ofilename)
-    call system("multimarkdown /tmp/" . ofilename . " > /tmp/" . nfilename)
-    call system("gnome-open /tmp/" . nfilename)
+    return 'unix'
   elseif has('win32') || has('win64') || has('win16')
-    let s:vimtmp = $appdata . "\\vim\\tmp"
-    if isdirectory(s:vimtmp) == 'FALSE'
-      call system("mkdir " . s:vimtmp)
+    return 'windows'
+  endif
+endfunction
+
+function! s:GetTempDir(os)
+  if a:os == 'mac' || a:os == 'unix'
+    return '/tmp/'
+  elseif a:os == 'wsl'
+    " Lop newlines off the end of wslpath output
+    let appdata = system("wslpath '" . $APPDATA . "'")[:-2]
+    let vimtmp = appdata . '/vim/tmp/'
+    if isdirectory(vimtmp) == 'FALSE'
+      call system('mkdir -p ' . vimtmp)
     endif
-    call writefile(text, $appdata . '\vim\tmp\' . ofilename)
-    call system('multimarkdown "' . $appdata . '\vim\tmp\' . ofilename . '" -o "' . $appdata . '\vim\tmp\' . nfilename . '"')
-    call system('"' . $appdata . '\vim\tmp\' . nfilename . '"')
+    return vimtmp
+  elseif a:os == 'windows'
+    let vimtmp = $APPDATA . '\vim\tmp\'
+    if isdirectory(vimtmp) == 'FALSE'
+      call system('mkdir ' . vimtmp)
+    endif
+    return vimtmp
+  endif
+endfunction
+
+function! s:ConvertMarkdown(md_file, html_file, os)
+  if a:os == 'mac' || a:os == 'unix'
+    call system('multimarkdown ' . a:md_file . ' > ' . a:html_file)
+  elseif a:os == 'wsl' || a:os == 'windows'
+    call system('multimarkdown "' . a:md_file . '" -o "' . a:html_file . '"')
+  endif
+endfunction
+
+function! s:DisplayHTML(html_file, os)
+  if a:os == 'mac'
+    call system('open ' . a:html_file)
+  elseif a:os == 'wsl'
+    let winpath = system('wslpath -w ' . a:html_file)
+    let escpath = substitute(winpath, '\', '\\\\', 'g')
+    exec '!cmd.exe /c start' escpath
+  elseif a:os == 'unix'
+    call system('gnome-open ' . a:html_file)
+  elseif a:os == 'windows'
+    call system('"' . a:html_file . '"')
   endif
 endfunction
 
