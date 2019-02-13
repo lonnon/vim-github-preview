@@ -1,3 +1,4 @@
 [submodule "github-markdown-formatter"]
 	path = github-markdown-formatter
 	url = git@github.com:lonnon/github-markdown-formatter.git
+  ignore = dirty
